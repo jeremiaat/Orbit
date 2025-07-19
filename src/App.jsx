@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Login from './components/login';
+import Login from './components/Login';
 import UrlManager from './components/UrlManager';
 import HomePage from './components/HOME/HomePage';
 import HabitTracker from './components/Habit-Tracker';
