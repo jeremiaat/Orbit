@@ -3,8 +3,8 @@ name: Deploy to Firebase Hosting
 on:
   push:
     branches:
-      - master # Ensure this matches your GitHub branch name (it's 'master' for you)
-  workflow_dispatch:
+      - master # Ensure this matches your GitHub branch name (e.g., 'main' or 'master')
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
 
 jobs:
   build_and_deploy:
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Use a stable Node.js LTS version (e.g., 18, 20)
+          node-version: '20' # Use a stable Node.js LTS version
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
@@ -25,14 +25,17 @@ jobs:
         run: npm install # Installs dependencies for your frontend project
 
       - name: Build Frontend Application
-        run: npm run build # IMPORTANT: Change this to your actual build command (e.g., 'npm run build', 'yarn build', 'ng build --configuration production')
+        run: npm run build # Your build command for Vite
         env:
-          CI: true # Often required for Create React App builds in CI environments
+          CI: true # Often required for Create React App/Vite builds in CI environments
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SOCIAL_MANAGER_C279D }}' # Your secret name from GitHub
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SOCIAL_MANAGER_C279D }}' # This MUST match your secret name in GitHub
           projectId: social-manager-c279d # Your Firebase Project ID
           channelId: live
+
+
+          
