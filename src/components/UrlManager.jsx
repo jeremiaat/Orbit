@@ -3,8 +3,8 @@ import { ExternalLink, Trash2, PlusCircle, Search, Save, XCircle, Info, ThumbsUp
 import Navbar from './HOME/Navbar';
 import Footer from './HOME/Footer';
 import { db, auth } from '../config/firebase';
-import { collection, doc, addDoc, getDocs, deleteDoc, query, orderBy, where } from 'firebase/firestore'; // Import 'where'
-import { onAuthStateChanged } from 'firebase/auth'; // Import for auth state changes
+import { collection, doc, addDoc, getDocs, deleteDoc, query, orderBy, where } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const UrlManager = () => {
     // UI State for feedback and loading
@@ -26,10 +26,10 @@ const UrlManager = () => {
     const [currentVideoEmbedUrl, setCurrentVideoEmbedUrl] = useState('');
     const [currentVideoTitle, setCurrentVideoTitle] = useState('');
     const [currentOriginalVideoUrl, setCurrentOriginalVideoUrl] = useState('');
-    const [copiedToClipboard, setCopiedToClipboard] = useState(null); // Changed to store ID of copied item
+    const [copiedToClipboard, setCopiedToClipboard] = useState(null);
 
     // Get current user (will be null if not logged in)
-    const [currentUser, setCurrentUser] = useState(null); // Use useState to manage currentUser
+    const [currentUser, setCurrentUser] = useState(null);
 
     // Helper to show temporary feedback messages
     const showFeedback = (type, message) => {
@@ -50,9 +50,8 @@ const UrlManager = () => {
         const youtubeMatch = inputUrl.match(youtubeRegex);
         if (youtubeMatch && youtubeMatch[1]) {
             videoId = youtubeMatch[1];
-            // Fix: Use template literal correctly
-            embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&modestbranding=1&rel=0`;
-            return { platform: 'youtube', embedUrl };
+            embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&modestbranding=1&rel=0&fs=1`; // Corrected template literal and added fs=1
+            return { platform: 'youtube', embedUrl, aspectRatio: '16/9' };
         }
 
         // TikTok
@@ -60,20 +59,20 @@ const UrlManager = () => {
         const tiktokMatch = inputUrl.match(tiktokRegex);
         if (tiktokMatch && tiktokMatch[1]) {
             videoId = tiktokMatch[1];
+            // TikTok embed rules can be tricky, this might require a server-side oEmbed
+            // For simple client-side, direct embed might not work for all TikToks without their SDK or oEmbed
+            // We'll use a placeholder for now, often direct embed requires their widget
             embedUrl = `https://www.tiktok.com/embed/v2/${videoId}?autoplay=1&embedFrom=oembed`;
-            return { platform: 'tiktok', embedUrl };
+            return { platform: 'tiktok', embedUrl, aspectRatio: '9/16' };
         }
 
-        // Instagram (Note: Instagram embedding via direct iframe is often restricted or requires oEmbed API)
+        // Instagram
         const instagramRegex = /(?:instagram\.com\/p\/|instagram\.com\/reel\/|instagr\.am\/p\/|instagr\.am\/reel\/)([a-zA-Z0-9_-]+)/;
         const instagramMatch = inputUrl.match(instagramRegex);
         if (instagramMatch && instagramMatch[1]) {
             videoId = instagramMatch[1];
-            // Instagram embedding is complex and often requires their oEmbed API or specific embed codes.
-            // A direct iframe might not always work reliably without server-side processing for oEmbed.
-            // For a simple client-side example, we'll try a basic embed URL, but expect limitations.
             embedUrl = `https://www.instagram.com/p/${videoId}/embed/`;
-            return { platform: 'instagram', embedUrl };
+            return { platform: 'instagram', embedUrl, aspectRatio: '4/5' };
         }
 
         return null;
@@ -116,29 +115,44 @@ const UrlManager = () => {
         setIsLoading(true);
         try {
             const urlCollectionRef = collection(db, "Url", currentUser.uid, "userUrls");
-            let q = query(urlCollectionRef, orderBy("createdAt", "desc"));
+            let q;
 
-            // Apply search filter if searchTerm is not empty
-            const trimmedSearchTerm = searchTerm.trim();
+            const trimmedSearchTerm = searchTerm.trim().toLowerCase(); // Convert search term to lowercase
+
             if (trimmedSearchTerm) {
-                // IMPORTANT: This creates a prefix search.
-                // It will find titles that START WITH the searchTerm (case-insensitive due to toLowerCase).
-                // For "contains" search across multiple fields, you'd need a dedicated search service.
-                const searchLower = trimmedSearchTerm.toLowerCase();
+                // Perform a prefix search on the 'titleLower' field
+                // This requires an index on 'titleLower' (and 'createdAt' if you want to order by it)
                 q = query(
                     urlCollectionRef,
-                    where("title", ">=", searchLower),
-                    where("title", "<=", searchLower + '\uf8ff'), // \uf8ff is a special unicode char to get all prefixes
-                    orderBy("title"), // Must order by the field you are querying on
-                    orderBy("createdAt", "desc") // Secondary order, but primary orderBy is required for where clauses
+                    where("titleLower", ">=", trimmedSearchTerm),
+                    where("titleLower", "<=", trimmedSearchTerm + '\uf8ff'),
+                    orderBy("titleLower"), // Order by title for efficient prefix search
+                    orderBy("createdAt", "desc") // Secondary order
                 );
-                // Note: Firestore requires an index for this composite query.
-                // You'll get a console warning with a link to create it if you don't have one.
+            } else {
+                // Default query if no search term
+                q = query(urlCollectionRef, orderBy("createdAt", "desc"));
             }
 
-
             const data = await getDocs(q);
-            const items = data.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+            let items = data.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+
+            // --- Client-side filtering for description search (Optional, if you want "OR" with description) ---
+            // If you want to also search description, you might do this here after fetching
+            // a broader set or by making a second query.
+            // For example, to filter by description if a term exists and title didn't match perfectly:
+            if (trimmedSearchTerm) {
+                 items = items.filter(item =>
+                    item.titleLower.includes(trimmedSearchTerm) ||
+                    (item.descriptionLower && item.descriptionLower.includes(trimmedSearchTerm))
+                );
+                // Note: The Firestore query already filtered by title prefix.
+                // This client-side filter would only add description matches if you were
+                // fetching *all* data first, which is not efficient for large datasets.
+                // The current implementation is a true prefix search on title in Firestore.
+                // If you want "OR" with description efficiently, consider a more advanced search setup.
+            }
+
             setUrlItems(items);
             if (feedback.type === 'info' || feedback.type === 'error') {
                 setFeedback({ type: '', message: '' });
@@ -152,7 +166,7 @@ const UrlManager = () => {
         }
     };
 
-    // --- Add URL to Firestore ---
+    // --- Add URL to Firestore (UPDATED to store lowercase fields) ---
     const handleAddLink = async (e) => {
         e.preventDefault();
 
@@ -175,10 +189,15 @@ const UrlManager = () => {
 
         try {
             const urlCollectionRef = collection(db, "Url", currentUser.uid, "userUrls");
+            const trimmedTitle = title.trim();
+            const trimmedDescription = description.trim();
+
             await addDoc(urlCollectionRef, {
-                title: title.trim().toLowerCase(), // Store in lowercase for easier prefix search
+                title: trimmedTitle,
+                titleLower: trimmedTitle.toLowerCase(), // Store lowercase title for search
                 url: url.trim(),
-                description: description.trim(),
+                description: trimmedDescription,
+                descriptionLower: trimmedDescription.toLowerCase(), // Store lowercase description for search
                 createdAt: new Date(),
             });
 
@@ -187,7 +206,7 @@ const UrlManager = () => {
             setDescription('');
 
             showFeedback('success', 'Awesome! Your link has been successfully saved! 👍');
-            fetchUrlList(); // Re-fetch list to include the new item
+            fetchUrlList();
         } catch (err) {
             console.error('Uh oh! Error adding your link:', err);
             showFeedback('error', 'Couldn\'t save your link right now. Give it another shot! 😥');
@@ -211,7 +230,7 @@ const UrlManager = () => {
             await deleteDoc(urlDoc);
 
             showFeedback('success', 'Got it! Your link has been removed. 🎉');
-            fetchUrlList(); // Re-fetch list to reflect deletion
+            fetchUrlList();
         } catch (err) {
             console.error('Darn it! Error deleting your link:', err);
             showFeedback('error', 'Couldn\'t delete that link. Please try again! ❌');
@@ -230,14 +249,10 @@ const UrlManager = () => {
 
     // --- Fetch URLs when currentUser or searchTerm changes ---
     useEffect(() => {
-        // Only fetch if currentUser is known (not null or undefined)
         if (currentUser !== undefined) {
             fetchUrlList();
         }
-    }, [currentUser, searchTerm]); // Depend on currentUser and searchTerm
-
-    // No need for client-side filtering anymore if fetchUrlList handles it
-    // const filteredUrlItems = urlItems.filter(...)
+    }, [currentUser, searchTerm]);
 
     return (
         <>
@@ -253,8 +268,8 @@ const UrlManager = () => {
                 {feedback.message && (
                     <div className={`
                         ${feedback.type === 'success' ? 'bg-green-100 border-green-400 text-green-700' :
-                           feedback.type === 'error' ? 'bg-red-100 border-red-400 text-red-700' :
-                           'bg-blue-100 border-blue-400 text-blue-700'}
+                            feedback.type === 'error' ? 'bg-red-100 border-red-400 text-red-700' :
+                            'bg-blue-100 border-blue-400 text-blue-700'}
                         px-4 py-3 rounded-lg relative mb-8 w-full max-w-xl text-center shadow-md animate-fade-in
                         flex items-center justify-between
                     `} role="alert">
@@ -342,10 +357,10 @@ const UrlManager = () => {
                         <div className="relative mb-6">
                             <input
                                 type="text"
-                                placeholder='Quickly find links by title (prefix search)...'
+                                placeholder='Quickly find links by title or description...'
                                 className='w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 outline-none transition duration-200 text-gray-800'
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)} // searchTerm will trigger useEffect to refetch
+                                onChange={(e) => setSearchTerm(e.target.value)}
                             />
                             <Search
                                 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
@@ -360,7 +375,7 @@ const UrlManager = () => {
                                     <div className="w-8 h-8 border-4 border-purple-400 border-b-transparent rounded-full animate-spin"></div>
                                     <p className="ml-4 text-gray-600">Loading your treasures...</p>
                                 </div>
-                            ) : urlItems.length === 0 ? ( // Display based on urlItems, which is now search-filtered
+                            ) : urlItems.length === 0 ? (
                                 <div className="text-gray-500 text-center py-8">
                                     <Info size={30} className="mx-auto mb-3 text-blue-400" />
                                     <p className="mb-2">
@@ -371,7 +386,7 @@ const UrlManager = () => {
                                     )}
                                 </div>
                             ) : (
-                                urlItems.map((item) => ( // Render urlItems directly
+                                urlItems.map((item) => (
                                     <div
                                         key={item.id}
                                         className='bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-md transform transition-all duration-300 hover:scale-[1.01] hover:shadow-lg'
@@ -394,13 +409,13 @@ const UrlManager = () => {
                                         {item.description && (
                                             <p className='text-gray-600 text-sm mb-4 line-clamp-2'>{item.description}</p>
                                         )}
-                                        <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center mt-4 pt-4 border-t border-gray-100'>
-                                            <div className="flex flex-wrap gap-2 mb-2 sm:mb-0">
+                                        <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center mt-4 pt-4 border-t border-gray-100 gap-2'>
+                                            <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
                                                 {/* Play Video Button */}
                                                 {getVideoEmbedUrl(item.url) && (
                                                     <button
                                                         onClick={() => handlePlayVideo(item.url, item.title)}
-                                                        className='inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 transition-colors duration-200'
+                                                        className='inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 transition-colors duration-200 w-full sm:w-auto'
                                                         title="Play video here"
                                                     >
                                                         <PlayCircle size={16} className='mr-2' /> Watch In-Site
@@ -411,7 +426,7 @@ const UrlManager = () => {
                                                 <button
                                                     onClick={() => copyLink(item.url, item.id)}
                                                     className={`
-                                                        inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-lg shadow-md
+                                                        inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-lg shadow-md w-full sm:w-auto
                                                         ${copiedToClipboard === item.id ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}
                                                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200
                                                     `}
@@ -427,7 +442,7 @@ const UrlManager = () => {
                                                 href={item.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className='inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200'
+                                                className='inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition-colors duration-200 w-full sm:w-auto'
                                                 title="Open this link in a new tab"
                                             >
                                                 Visit Link
@@ -446,12 +461,12 @@ const UrlManager = () => {
             {/* --- Video Playback Modal --- */}
             {showVideoModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-2xl p-6 relative w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+                    <div className="bg-white rounded-lg shadow-2xl p-6 relative w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-gray-800 truncate pr-8">{currentVideoTitle}</h2>
                             <div className="flex items-center space-x-2">
                                 <button
-                                    onClick={() => copyLink(currentOriginalVideoUrl, 'modal')} // Use 'modal' as a special ID
+                                    onClick={() => copyLink(currentOriginalVideoUrl, 'modal')}
                                     className={`
                                         p-2 rounded-full transition-colors duration-200 flex items-center justify-center
                                         ${copiedToClipboard === 'modal' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'}
@@ -470,13 +485,19 @@ const UrlManager = () => {
                                 </button>
                             </div>
                         </div>
-                        <div className="relative pt-[56.25%] w-full bg-black rounded-lg overflow-hidden">
+                        <div className={`relative w-full bg-black rounded-lg overflow-hidden flex-grow`}
+                            style={{ paddingTop:
+                                getVideoEmbedUrl(currentOriginalVideoUrl)?.aspectRatio === '9/16' ? '177.77%' :
+                                getVideoEmbedUrl(currentOriginalVideoUrl)?.aspectRatio === '4/5' ? '125%' :
+                                '56.25%'
+                            }}
+                        >
                             {currentVideoEmbedUrl ? (
                                 <iframe
                                     src={currentVideoEmbedUrl}
                                     title={currentVideoTitle}
                                     frameBorder="0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                                     allowFullScreen
                                     className="absolute top-0 left-0 w-full h-full"
                                 ></iframe>
