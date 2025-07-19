@@ -1,0 +1,38 @@
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - master # Ensure this matches your GitHub branch name (it's 'master' for you)
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use a stable Node.js LTS version (e.g., 18, 20)
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Install Project Dependencies
+        run: npm install # Installs dependencies for your frontend project
+
+      - name: Build Frontend Application
+        run: npm run build # IMPORTANT: Change this to your actual build command (e.g., 'npm run build', 'yarn build', 'ng build --configuration production')
+        env:
+          CI: true # Often required for Create React App builds in CI environments
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SOCIAL_MANAGER_C279D }}' # Your secret name from GitHub
+          projectId: social-manager-c279d # Your Firebase Project ID
+          channelId: live
