@@ -28,32 +28,32 @@ function App() {
         // You can render a loading spinner or splash screen here
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100 font-sans text-inter">
-            {/* Container for the loading animation and text */}
-            <div className="flex flex-col items-center space-y-4 p-6 bg-white rounded-lg shadow-lg">
-                {/* Bouncing Dots Loading Animation */}
-                <div className="flex space-x-2">
-                    {/* Dot 1 */}
-                    <div className="w-4 h-4 bg-blue-500 rounded-full animate-[bounce-dot_1.4s_infinite_ease-in-out_both]"></div>
-                    {/* Dot 2 */}
-                    <div className="w-4 h-4 bg-violet-500 rounded-full animate-[bounce-dot_1.4s_infinite_ease-in-out_both] delay-150"></div>
-                    {/* Dot 3 */}
-                    <div className="w-4 h-4 bg-indigo-500 rounded-full animate-[bounce-dot_1.4s_infinite_ease-in-out_both] delay-300"></div>
-                </div>
-                {/* Loading Text */}
-                <p className='font-bold text-lg text-gray-700'>Loading...</p>
-            </div>
+    {/* Container for the loading animation and text */}
+    <div className="flex flex-col items-center space-y-4 p-6 bg-white rounded-lg shadow-lg">
+        {/* Bouncing Dots Loading Animation */}
+        <div className="flex space-x-1.5"> {/* Reduced space between dots */}
+            {/* Dot 1 */}
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-[bounce-dot_1.4s_infinite_ease-in-out_both_0s]"></div> {/* Smaller size */}
+            {/* Dot 2 */}
+            <div className="w-3 h-3 bg-violet-500 rounded-full animate-[bounce-dot_1.4s_infinite_ease-in-out_both_0.15s]"></div> {/* Smaller size */}
+            {/* Dot 3 */}
+            <div className="w-3 h-3 bg-indigo-500 rounded-full animate-[bounce-dot_1.4s_infinite_ease-in-out_both_0.3s]"></div> {/* Smaller size */}
+        </div>
+        {/* Loading Text */}
+        <p className='font-bold text-base text-gray-700'>Loading...</p> {/* Slightly smaller text */}
+    </div>
 
-            {/* Custom CSS for the bounce-dot animation */}
-            <style jsx>{`
-                @keyframes bounce-dot {
-                    0%, 80%, 100% {
-                        transform: scale(0);
-                    }
-                    40% {
-                        transform: scale(1.0);
-                    }
-                }
-            `}</style>
+    {/* Custom CSS for the bounce-dot animation */}
+    <style jsx>{`
+        @keyframes bounce-dot {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-15px); /* Adjusted bounce height for smaller dots */
+            }
+        }
+    `}</style>
         </div>
         );
     }
