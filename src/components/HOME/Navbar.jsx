@@ -15,7 +15,7 @@ const Navbar = () => {
     <div className='flex justify-between px-8 py-4 w-full rounded'>
       <div className='text-xl font-bold'>
         <a href="/">
-            <span className='text-violet-900'>Social Manager</span> 
+            <span className='text-violet-900'>Orbit</span> 
             </a>
       </div>
       <div>

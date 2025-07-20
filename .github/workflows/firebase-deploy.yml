@@ -3,7 +3,7 @@ name: Deploy to Firebase Hosting
 on:
   push:
     branches:
-      - master # Ensure this matches your GitHub branch name (e.g., 'main' or 'master')
+      - master # IMPORTANT: Ensure this matches your GitHub branch name (e.g., 'main' or 'master')
   workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
 
 jobs:
@@ -33,9 +33,9 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SOCIAL_MANAGER_C279D }}' # This MUST match your secret name in GitHub
-          projectId: social-manager-c279d # Your Firebase Project ID
+          # This MUST match the name of the secret you create in GitHub for your NEW 'Orbit' project.
+          # You will need to generate a new service account key for your 'Orbit' project
+          # and save it as a secret in your GitHub repository.
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ORBIT_PROJECT }}' # <--- CHANGED!
+          projectId: orbit-flow # <--- CHANGED! Replace with your NEW Firebase Project ID (e.g., 'orbit-app')
           channelId: live
-
-
-          
